@@ -11,6 +11,10 @@ AUR_PACKAGES=(
   "visual-studio-code-bin"
 )
 
+sudo pacman -Sy
+
+yay -Sy
+
 FAILED_PACKAGES=()
 
 for package in "${AUR_PACKAGES[@]}"; do
