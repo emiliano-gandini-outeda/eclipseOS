@@ -32,14 +32,3 @@ git clone https://github.com/emiliano-gandini-outeda/omarchy.git
 cd omarchy
 sudo bash install.sh
 ```
-
-Yay Packages to install:
-
-asdcontrol-git
-clipse
-github-desktop
-proton-ge-custom-bin
-python-pyautogui
-vesktop
-wl-screenrec
-zen-browser-bin
