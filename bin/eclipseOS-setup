@@ -7,20 +7,40 @@ AUR_PACKAGES=(
   "python-pyautogui"
   "vesktop"
   "clipse"
-  "zen-broswer-bin"
+  "zen-browser-bin"
   "visual-studio-code-bin"
 )
 
+FAILED_PACKAGES=()
+
 for package in "${AUR_PACKAGES[@]}"; do
   echo "-> Installing $package..."
-  yay -S --noconfirm "$package"
+  if ! yay -S --noconfirm "$package"; then
+    echo "!! Failed to install $package"
+    FAILED_PACKAGES+=("$package")
+  fi
 done
 
 echo
 echo "-> Installing github-desktop (NODE_VERSION=20.0)..."
-NODE_VERSION=20.0 yay -S --noconfirm github-desktop
+if ! NODE_VERSION=20.0 yay -S --noconfirm github-desktop; then
+  echo "!! Failed to install github-desktop"
+  FAILED_PACKAGES+=("github-desktop")
+fi
 
 echo
-echo "✔ Done! All eclipseOS packages installed."
+echo "✔ Done! All eclipseOS packages processed."
+
+if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
+  echo
+  echo "⚠ The following packages failed to install:"
+  for pkg in "${FAILED_PACKAGES[@]}"; do
+    echo " - $pkg"
+  done
+else
+  echo "✓ All packages installed successfully!"
+fi
+
+echo
 echo "Press ENTER to close..."
 read
