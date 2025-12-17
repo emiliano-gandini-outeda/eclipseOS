@@ -36,3 +36,5 @@ run_logged $OMARCHY_INSTALL/config/hardware/fix-surface-keyboard.sh
 
 run_logged $OMARCHY_INSTALL/config/whatsapp.sh
 run_logged $OMARCHY_INSTALL/config/swap.sh
+run_logged $OMARCHY_INSTALL/config/spicetify.sh
+run_logged $OMARCHY_INSTALL/config/extra-packages.sh
