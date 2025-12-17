@@ -35,3 +35,4 @@ run_logged $OMARCHY_INSTALL/config/hardware/fix-surface-keyboard.sh
 # Custom time
 
 run_logged $OMARCHY_INSTALL/config/whatsapp.sh
+run_logged $OMARCHY_INSTALL/config/swap.sh
