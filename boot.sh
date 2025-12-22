@@ -13,8 +13,11 @@ ansi_art='
 ███     ██  ███▄    ██  ███     █▄    █████   ███          ▀███████▀  ███     ███
 █████████▀   ▀███████▀   ▀███████▀   ███████  ██              ▀▀▀      ▀███████▀ '
 
+ORANGE="\e[38;2;203;56;16m"
+RESET="\e[0m"
+
 clear
-echo -e "\n$ansi_art\n"
+echo -e "\n${ORANGE}${ansi_art}${RESET}\n"
 
 sudo pacman -Syu --noconfirm --needed git
 
