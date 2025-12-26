@@ -31,3 +31,7 @@ run_logged $OMARCHY_INSTALL/config/hardware/fix-apple-spi-keyboard.sh
 run_logged $OMARCHY_INSTALL/config/hardware/fix-apple-suspend-nvme.sh
 run_logged $OMARCHY_INSTALL/config/hardware/fix-apple-t2.sh
 run_logged $OMARCHY_INSTALL/config/hardware/fix-surface-keyboard.sh
+
+# Custom time
+
+run_logged $OMARCHY_INSTALL/config/swap.sh
