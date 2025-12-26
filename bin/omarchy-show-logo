@@ -1,7 +1,9 @@
 #!/bin/bash
 
 clear
-echo -e "\033[32m"
-cat <~/.local/share/omarchy/logo.txt
+# Set text color to #5D0606
+echo -e "\033[38;2;93;6;6m"
+cat ~/.local/share/omarchy/logo.txt
+# Reset color
 echo -e "\033[0m"
 echo
