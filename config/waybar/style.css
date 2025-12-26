@@ -1,12 +1,13 @@
 @import "../omarchy/current/theme/waybar.css";
 
 * {
-  background:transparent;
+  background-color: @background;
   color: @foreground;
+
   border: none;
-  border-radius: 8;
+  border-radius: 0;
   min-height: 0;
-  font-family: CaskaydiaMono Nerd Font;
+  font-family: 'JetBrainsMono Nerd Font';
   font-size: 12px;
 }
 
@@ -29,11 +30,8 @@
   opacity: 0.5;
 }
 
-#tray,
 #cpu,
 #battery,
-#network,
-#bluetooth,
 #pulseaudio,
 #custom-omarchy,
 #custom-screenrecording-indicator,
@@ -42,8 +40,20 @@
   margin: 0 7.5px;
 }
 
+#tray {
+  margin-right: 16px;
+}
+
+#bluetooth {
+  margin-right: 17px;
+}
+
+#network {
+  margin-right: 13px;
+}
+
 #custom-expand-icon {
-  margin-right: 7px;
+  margin-right: 18px;
 }
 
 tooltip {
@@ -71,14 +81,3 @@ tooltip {
 #custom-screenrecording-indicator.active {
   color: #a55555;
 }
-
-#waybar {
-  background-color: rgba(30, 30, 30, 0.5);
-  margin: 10;
-}
-
-#idle_inhibitor {
-  padding: 0 6px;       /* or 0 8px */
-  margin: 0 4px;
-}
-

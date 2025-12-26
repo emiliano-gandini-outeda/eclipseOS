@@ -1,12 +1,16 @@
 # Omarchy core package list installed via install/packaging/base.sh
 # This file is also used by the ISO builder when determining needs
 
+1password-beta
+1password-cli
 aether
+alacritty
 asdcontrol
 avahi
 bash-completion
 bat
 bluetui
+bolt
 brightnessctl
 btop
 clang
@@ -44,6 +48,7 @@ gvfs-smb
 hypridle
 hyprland
 hyprland-guiutils
+hyprland-preview-share-picker
 hyprlock
 hyprpicker
 hyprsunset
@@ -80,6 +85,7 @@ noto-fonts-extra
 nss-mdns
 nvim
 obs-studio
+obsidian
 omarchy-chromium
 omarchy-nvim
 omarchy-walker
@@ -100,6 +106,7 @@ ruby
 rust
 satty
 sddm
+signal-desktop
 slurp
 spotify
 starship
@@ -132,28 +139,7 @@ xdg-desktop-portal-gtk
 xdg-desktop-portal-hyprland
 xdg-terminal-exec
 xmlstarlet
+xournalpp
 yaru-icon-theme
 yay
 zoxide
-alsa-utils
-blueberry
-cheese
-cpanminus
-flatpak
-glow
-gphoto2
-gvfs-gphoto2
-hyprshot
-okular
-rofi
-fish
-rofi-calc
-speedtest-cli
-starship
-swayidle
-swaybg
-wf-recorder
-wtype
-alacritty
-xclip
-calcurse

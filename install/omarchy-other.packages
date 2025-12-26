@@ -42,13 +42,6 @@ webp-pixbuf-loader
 wget
 yay-debug
 zram-generator
-amd-ucode
-efibootmgr
-ntfs-3g
-nvidia-settings
-rsync
-socat
-xdg-desktop-portal-wlr
 
 # T2 MacBook support packages
 apple-bcm-firmware
