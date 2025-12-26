@@ -9,10 +9,6 @@ cp ~/.local/share/omarchy/default/bashrc ~/.bashrc
 if ! grep -q "$(which fish)" /etc/shells; then  
   echo "$(which fish)" | sudo tee -a /etc/shells  
 fi  
-
-chmod +x .config/rofi/rofi-calc.sh
-
-chmod +x .config/waybar/scripts/*
-
+  
 # Establecer Fish como shell por defecto del sistema  
 sudo usermod -s $(which fish) $USER
