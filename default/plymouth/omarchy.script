@@ -244,8 +244,8 @@ message_sprite.SetPosition(10, 10, 10000);
 
 fun display_message_callback (text)
 {
-  # Texto principal en #CB3810
-  my_image = Image.Text(text, 0.80, 0.22, 0.06);
+  # Texto en gris claro (#d0d0d0)
+  my_image = Image.Text(text, 0.82, 0.82, 0.82);
   message_sprite.SetImage(my_image);
 }
 
