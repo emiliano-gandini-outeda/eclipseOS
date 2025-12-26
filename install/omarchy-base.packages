@@ -85,7 +85,6 @@ noto-fonts-extra
 nss-mdns
 nvim
 obs-studio
-obsidian
 omarchy-chromium
 omarchy-nvim
 omarchy-walker
@@ -106,7 +105,6 @@ ruby
 rust
 satty
 sddm
-signal-desktop
 slurp
 spotify
 starship
@@ -139,7 +137,13 @@ xdg-desktop-portal-gtk
 xdg-desktop-portal-hyprland
 xdg-terminal-exec
 xmlstarlet
-xournalpp
 yaru-icon-theme
 yay
 zoxide
+okular
+rofi
+fish
+rofi-calc
+speedtest-cli
+xclip
+calcurse

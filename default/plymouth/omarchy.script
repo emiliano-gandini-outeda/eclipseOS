@@ -1,7 +1,7 @@
 # Omarchy Plymouth Theme Script
 
-Window.SetBackgroundTopColor(0.101, 0.105, 0.149);
-Window.SetBackgroundBottomColor(0.101, 0.105,  0.149);
+Window.SetBackgroundTopColor(0.20, 0.20, 0.20);
+Window.SetBackgroundBottomColor(0.20, 0.20, 0.20);
 
 logo.image = Image("logo.png");
 logo.sprite = Sprite(logo.image);
@@ -244,7 +244,7 @@ message_sprite.SetPosition(10, 10, 10000);
 
 fun display_message_callback (text)
 {
-  my_image = Image.Text(text, 1, 1, 1);
+  my_image = Image.Text(text, 0.82, 0.82, 0.82);
   message_sprite.SetImage(my_image);
 }
 

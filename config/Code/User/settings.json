@@ -1,0 +1,34 @@
+{
+  "git.confirmSync": false,
+  "workbench.iconTheme": "vscode-icons",
+  "workbench.sideBar.location": "right",
+  "vsicons.dontShowNewVersionMessage": true,
+  "css.enabledLanguages": [
+    "html"
+  ],
+  "files.associations": {
+    "*.html": "html",
+    "**/*.html": "html"
+  },
+  "emmet.includeLanguages": {
+    "django-html": "html"
+  },
+  "tailwindCSS.includeLanguages": {
+    "django-html": "html"
+  },
+  "tailwindCSS.files.exclude": [
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/*.py"
+  ],
+  "[django-html]": {
+    "editor.quickSuggestions": {
+      "other": true,
+      "comments": false,
+      "strings": true
+    }
+  },
+  "editor.fontFamily": "Consolas, 'Courier New', monospace",
+  "python.defaultInterpreterPath": "/bin/python",
+  "makefile.configureOnOpen": true
+}
