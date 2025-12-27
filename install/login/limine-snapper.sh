@@ -62,8 +62,8 @@ EOF
 ### Read more at config document: https://github.com/limine-bootloader/limine/blob/trunk/CONFIG.md
 #timeout: 3
 default_entry: 2
-interface_branding: Omarchy Bootloader
-interface_branding_color: 2
+interface_branding: EclipseOS Bootloader
+interface_branding_color: 7
 hash_mismatch_panic: no
 
 term_background: 1a1b26
