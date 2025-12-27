@@ -33,7 +33,6 @@ for package in "${AUR_PACKAGES[@]}"; do
   echo "-> Clean-building $package..."
   if ! yay -S \
     --noconfirm \
-    --cleanbuild \
     --rebuild \
     --cleanafter \
     "$package"; then
@@ -64,11 +63,14 @@ curl -fsSL https://raw.githubusercontent.com/spicetify/spicetify-marketplace/mai
 spicetify update
 spicetify apply
 
-
+echo
 echo "=== Configuring File Permissions ==="
 chmod +x .config/waybar/scripts/*
-
+chmod +x .config/rofi/*
+echo
+echo
 echo "=== Configuring Fish as shell ==="
+echo
 
 # Set fish as default shell (only if installed)
 if command -v fish >/dev/null 2>&1; then
@@ -81,7 +83,9 @@ if command -v fish >/dev/null 2>&1; then
     sudo chsh -s "$(command -v fish)" "$USER"
 fi
 
+echo
 echo "=== Installing Whatsapp Altus ==="
+echo
 
 # Crear directorio de la app
 mkdir -p ~/Documents/Apps/Whatsapp
@@ -109,10 +113,13 @@ Terminal=false
 Categories=Network;InstantMessaging;
 EOF
 
+echo
 echo "✔ Done! Whatsapp Altus installed !"
+echo
 
 echo
 echo "✔ Done! All eclipseOS packages processed."
+echo
 
 if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
   echo
@@ -124,61 +131,77 @@ else
   echo "✓ All packages installed successfully!"
 fi
 
+echo
 echo "=== Setting up proper swap ==="
+echo
 
 # Setup ZRAM (50% RAM) + SSD swapfile (50% RAM) using zram-generator
 # All sizes expressed in MiB (no suffix)
 
-# Get total RAM in MiB
-TOTAL_RAM=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
-HALF_RAM=$((TOTAL_RAM / 2))
+# ---- Get total RAM in MiB ----
+TOTAL_RAM_MIB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+HALF_RAM_MIB=$((TOTAL_RAM_MIB / 2))
 
-# ---- Remove existing zram swaps ----
-for dev in $(swapon --show=NAME --noheadings | grep zram); do
+echo "Total RAM: ${TOTAL_RAM_MIB} MiB"
+echo "ZRAM:      ${HALF_RAM_MIB} MiB"
+echo "Swapfile:  ${HALF_RAM_MIB} MiB"
+
+# ---- Disable all active zram swaps ----
+swapon --show=NAME --noheadings | grep -E '^/dev/zram' | while read -r dev; do
   sudo swapoff "$dev"
 done
 
+# ---- Remove old zram config ----
 sudo rm -f /etc/systemd/zram-generator.conf
 
-# ---- Configure zram-generator ----
+# ---- Configure zram-generator (50% RAM) ----
 sudo tee /etc/systemd/zram-generator.conf >/dev/null <<EOF
 [zram0]
-zram-size = $HALF_RAM
+zram-size = ${HALF_RAM_MIB}MiB
 compression-algorithm = lz4
 swap-priority = 100
 EOF
 
-# ---- SSD swapfile ----
+# ---- SSD swapfile (50% RAM) ----
 SWAPFILE=/swapfile
 
-# Disable existing swapfile
-if swapon --show=NAME --noheadings | grep -q "$SWAPFILE"; then
+# Disable if active
+if swapon --show=NAME --noheadings | grep -q "^$SWAPFILE$"; then
   sudo swapoff "$SWAPFILE"
 fi
 
+# Remove old entry from fstab (avoid duplicates)
+sudo sed -i "\|^$SWAPFILE |d" /etc/fstab
+
 # Recreate swapfile
 sudo rm -f "$SWAPFILE"
-sudo fallocate -l "$HALF_RAM"M "$SWAPFILE"
+sudo truncate -s "${HALF_RAM_MIB}M" "$SWAPFILE"
 sudo chmod 600 "$SWAPFILE"
 sudo mkswap "$SWAPFILE"
+
+# Enable swapfile (lower priority than zram)
 sudo swapon -p 10 "$SWAPFILE"
 
 # Persist swapfile
-if ! grep -q "^$SWAPFILE" /etc/fstab; then
-  echo "$SWAPFILE none swap defaults,pri=10 0 0" | sudo tee -a /etc/fstab
-fi
+echo "$SWAPFILE none swap defaults,pri=10 0 0" | sudo tee -a /etc/fstab
 
-# ---- Reload zram ----
+# ---- Reload and start zram ----
 sudo systemctl daemon-reload
 sudo systemctl restart systemd-zram-setup@zram0.service
 
+# ---- Show result ----
+echo
+swapon --show
+
 echo "Swap set up!"
 
+echo
 echo "Time to reboot :D !"
+echo
 
-sleep 3
+sleep 5
 
-omarchy-cmd-reboot
+reboot
 
 echo
 echo "Press ENTER to close..."
