@@ -135,21 +135,18 @@ echo
 echo "=== Setting up proper swap ==="
 echo
 
-# Setup ZRAM (50% RAM) + SSD swapfile (50% RAM) using zram-generator
-# All sizes expressed in MiB (no suffix)
-
 # ---- Get total RAM in MiB ----
-TOTAL_RAM_MIB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
-HALF_RAM_MIB=$((TOTAL_RAM_MIB / 2))
+set TOTAL_RAM_MIB (awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+set HALF_RAM_MIB (math "$TOTAL_RAM_MIB / 2")
 
-echo "Total RAM: ${TOTAL_RAM_MIB} MiB"
-echo "ZRAM:      ${HALF_RAM_MIB} MiB"
-echo "Swapfile:  ${HALF_RAM_MIB} MiB"
+echo "Total RAM: $TOTAL_RAM_MIB MiB"
+echo "ZRAM:      $HALF_RAM_MIB MiB"
+echo "Swapfile:  $HALF_RAM_MIB MiB"
 
 # ---- Disable all active zram swaps ----
-swapon --show=NAME --noheadings | grep -E '^/dev/zram' | while read -r dev; do
-  sudo swapoff "$dev"
-done
+for dev in (swapon --show=NAME --noheadings | grep '^/dev/zram')
+    sudo swapoff $dev
+end
 
 # ---- Remove old zram config ----
 sudo rm -f /etc/systemd/zram-generator.conf
@@ -163,24 +160,24 @@ swap-priority = 100
 EOF
 
 # ---- SSD swapfile (50% RAM) ----
-SWAPFILE=/swapfile
+set SWAPFILE /swapfile
 
 # Disable if active
-if swapon --show=NAME --noheadings | grep -q "^$SWAPFILE$"; then
-  sudo swapoff "$SWAPFILE"
-fi
+if swapon --show=NAME --noheadings | grep -q "^$SWAPFILE\$"
+    sudo swapoff $SWAPFILE
+end
 
 # Remove old entry from fstab (avoid duplicates)
 sudo sed -i "\|^$SWAPFILE |d" /etc/fstab
 
 # Recreate swapfile
-sudo rm -f "$SWAPFILE"
-sudo truncate -s "${HALF_RAM_MIB}M" "$SWAPFILE"
-sudo chmod 600 "$SWAPFILE"
-sudo mkswap "$SWAPFILE"
+sudo rm -f $SWAPFILE
+sudo truncate -s {$HALF_RAM_MIB}M $SWAPFILE
+sudo chmod 600 $SWAPFILE
+sudo mkswap $SWAPFILE
 
 # Enable swapfile (lower priority than zram)
-sudo swapon -p 10 "$SWAPFILE"
+sudo swapon -p 10 $SWAPFILE
 
 # Persist swapfile
 echo "$SWAPFILE none swap defaults,pri=10 0 0" | sudo tee -a /etc/fstab
@@ -194,6 +191,7 @@ echo
 swapon --show
 
 echo "Swap set up!"
+
 
 echo
 echo "Time to reboot :D !"
