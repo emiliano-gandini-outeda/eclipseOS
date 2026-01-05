@@ -67,7 +67,7 @@
   "custom/omarchy": {
     "format": "",
     "tooltip-format": "Arch Menu\n\nSuper + Alt + Space",
-    "on-click": "omarchy-menu"
+    "on-click": "eclipse-menu"
   },
   "mpris": {
     "format": "{player_icon} {status_icon} {title} – {artist}",
@@ -140,7 +140,7 @@
     "tooltip-format-discharging": "{power:>1.0f}W↓ {capacity}%",
     "tooltip-format-charging": "{power:>1.0f}W↑ {capacity}%",
     "interval": 5,
-    "on-click": "omarchy-menu power",
+    "on-click": "eclipse-menu power",
     "states": {
       "warning": 20,
       "critical": 10
