@@ -1,59 +1,67 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 echo "=== Installing eclipseOS extra packages ==="
 echo
 
 AUR_PACKAGES=(
-  "python-pyautogui"
-  "vesktop"
-  "clipse"
-  "zen-browser-bin"
-  "visual-studio-code-bin"
-  "spicetify-themes"
-  "github-desktop-bin"
+  python-pyautogui
+  vesktop
+  clipse
+  zen-browser-bin
+  visual-studio-code-bin
+  spicetify-themes
+  github-desktop-bin
 )
 
+# -------------------------------------------------------------------
+# System update
+# -------------------------------------------------------------------
 sudo pacman -Syu --noconfirm
 
+# -------------------------------------------------------------------
 # Ensure yay exists
-if ! command -v yay &> /dev/null; then
+# -------------------------------------------------------------------
+if ! command -v yay >/dev/null 2>&1; then
   echo "-> Installing yay..."
   sudo pacman -S --needed --noconfirm git base-devel
   git clone https://aur.archlinux.org/yay.git /tmp/yay
-  cd /tmp/yay
+  pushd /tmp/yay >/dev/null
   makepkg -si --noconfirm
-  cd - >/dev/null
+  popd >/dev/null
 fi
 
 yay -Syu --noconfirm
 
+# -------------------------------------------------------------------
+# Install AUR packages
+# -------------------------------------------------------------------
 FAILED_PACKAGES=()
 
 for package in "${AUR_PACKAGES[@]}"; do
   echo "-> Clean-building $package..."
-  if ! yay -S \
-    --noconfirm \
-    --rebuild \
-    --cleanafter \
-    "$package"; then
+  if ! yay -S --noconfirm --rebuild --cleanafter "$package"; then
     echo "!! Failed to install $package"
     FAILED_PACKAGES+=("$package")
   fi
 done
 
+# -------------------------------------------------------------------
+# Spicetify setup
+# -------------------------------------------------------------------
 echo
 echo "=== Configuring Spicetify ==="
 
 SPOTIFY_PREFS="$HOME/.config/spotify/prefs"
 SPOTIFY_INSTALL="/opt/spotify"
 
-if [ ! -f "$SPOTIFY_PREFS" ]; then
-  echo "-> Spotify prefs not found, creating a fake prefs..."
+if [[ ! -f "$SPOTIFY_PREFS" ]]; then
+  echo "-> Spotify prefs not found, creating fake prefs..."
   mkdir -p "$(dirname "$SPOTIFY_PREFS")"
   touch "$SPOTIFY_PREFS"
 fi
 
-if [ -d "$SPOTIFY_INSTALL" ]; then
+if [[ -d "$SPOTIFY_INSTALL" ]]; then
   echo "-> Adjusting permissions for /opt/spotify..."
   sudo chown -R "$USER:$USER" "$SPOTIFY_INSTALL"
 fi
@@ -63,67 +71,67 @@ curl -fsSL https://raw.githubusercontent.com/spicetify/spicetify-marketplace/mai
 spicetify update
 spicetify apply
 
+# -------------------------------------------------------------------
+# Permissions
+# -------------------------------------------------------------------
 echo
 echo "=== Configuring File Permissions ==="
-chmod +x .config/waybar/scripts/*
-chmod +x .config/rofi/*
-echo
+
+chmod +x .config/waybar/scripts/* 2>/dev/null || true
+chmod +x .config/rofi/* 2>/dev/null || true
+
+# -------------------------------------------------------------------
+# Fish shell
+# -------------------------------------------------------------------
 echo
 echo "=== Configuring Fish as shell ==="
-echo
 
-# Set fish as default shell (only if installed)
 if command -v fish >/dev/null 2>&1; then
-    # Ensure fish is in /etc/shells
-    if ! grep -Fxq "$(command -v fish)" /etc/shells; then
-        echo "$(command -v fish)" | sudo tee -a /etc/shells >/dev/null
-    fi
-
-    # Change the default shell for the user running the installer
-    sudo chsh -s "$(command -v fish)" "$USER"
+  if ! grep -Fxq "$(command -v fish)" /etc/shells; then
+    command -v fish | sudo tee -a /etc/shells >/dev/null
+  fi
+  sudo chsh -s "$(command -v fish)" "$USER"
 fi
 
+# -------------------------------------------------------------------
+# WhatsApp Altus
+# -------------------------------------------------------------------
 echo
-echo "=== Installing Whatsapp Altus ==="
-echo
+echo "=== Installing WhatsApp Altus ==="
 
-# Crear directorio de la app
-mkdir -p ~/Documents/Apps/Whatsapp
+WHATSAPP_DIR="$HOME/Documents/Apps/Whatsapp"
+WHATSAPP_APPIMAGE="$WHATSAPP_DIR/whatsapp.AppImage"
 
-# Descargar AppImage de WhatsApp
+mkdir -p "$WHATSAPP_DIR"
 
-curl -L \
-$(curl -s https://api.github.com/repos/amanharwara/altus/releases/latest \
- | grep browser_download_url \
- | grep AppImage \
- | cut -d '"' -f 4) \
--o ~/Documents/Apps/Whatsapp/whatsapp.AppImage
+curl -L "$(
+  curl -s https://api.github.com/repos/amanharwara/altus/releases/latest \
+    | grep browser_download_url \
+    | grep AppImage \
+    | cut -d '"' -f 4
+)" -o "$WHATSAPP_APPIMAGE"
 
+chmod +x "$WHATSAPP_APPIMAGE"
 
-# Dar permisos de ejecución
-chmod +x ~/Documents/Apps/Whatsapp/whatsapp.AppImage
-
-# Crear archivo .desktop del sistema
-sudo tee /usr/share/applications/whatsapp.desktop > /dev/null <<EOF
+sudo tee /usr/share/applications/whatsapp.desktop >/dev/null <<EOF
 [Desktop Entry]
 Type=Application
 Name=WhatsApp
-Exec=$HOME/Documents/Apps/Whatsapp/whatsapp.AppImage
+Exec=$WHATSAPP_APPIMAGE
 Terminal=false
 Categories=Network;InstantMessaging;
 EOF
 
-echo
-echo "✔ Done! Whatsapp Altus installed !"
-echo
+echo "✔ WhatsApp Altus installed!"
 
+# -------------------------------------------------------------------
+# Package summary
+# -------------------------------------------------------------------
 echo
-echo "✔ Done! All eclipseOS packages processed."
-echo
+echo "=== Package summary ==="
 
-if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
-  echo
-  echo "⚠ The following packages failed to install:"
+if (( ${#FAILED_PACKAGES[@]} > 0 )); then
+  echo "⚠ Failed packages:"
   for pkg in "${FAILED_PACKAGES[@]}"; do
     echo " - $pkg"
   done
@@ -131,27 +139,27 @@ else
   echo "✓ All packages installed successfully!"
 fi
 
+# -------------------------------------------------------------------
+# Swap & ZRAM
+# -------------------------------------------------------------------
 echo
 echo "=== Setting up proper swap ==="
 echo
 
-# ---- Get total RAM in MiB ----
-set TOTAL_RAM_MIB (awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
-set HALF_RAM_MIB (math "$TOTAL_RAM_MIB / 2")
+TOTAL_RAM_MIB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+HALF_RAM_MIB=$((TOTAL_RAM_MIB / 2))
 
 echo "Total RAM: $TOTAL_RAM_MIB MiB"
 echo "ZRAM:      $HALF_RAM_MIB MiB"
 echo "Swapfile:  $HALF_RAM_MIB MiB"
 
-# ---- Disable all active zram swaps ----
-for dev in (swapon --show=NAME --noheadings | grep '^/dev/zram')
-    sudo swapoff $dev
-end
+# Disable existing zram
+while read -r dev; do
+  sudo swapoff "$dev"
+done < <(swapon --show=NAME --noheadings | grep '^/dev/zram' || true)
 
-# ---- Remove old zram config ----
 sudo rm -f /etc/systemd/zram-generator.conf
 
-# ---- Configure zram-generator (50% RAM) ----
 sudo tee /etc/systemd/zram-generator.conf >/dev/null <<EOF
 [zram0]
 zram-size = ${HALF_RAM_MIB}MiB
@@ -159,48 +167,32 @@ compression-algorithm = lz4
 swap-priority = 100
 EOF
 
-# ---- SSD swapfile (50% RAM) ----
-set SWAPFILE /swapfile
+SWAPFILE=/swapfile
 
-# Disable if active
-if swapon --show=NAME --noheadings | grep -q "^$SWAPFILE\$"
-    sudo swapoff $SWAPFILE
-end
+if swapon --show=NAME --noheadings | grep -qx "$SWAPFILE"; then
+  sudo swapoff "$SWAPFILE"
+fi
 
-# Remove old entry from fstab (avoid duplicates)
 sudo sed -i "\|^$SWAPFILE |d" /etc/fstab
+sudo rm -f "$SWAPFILE"
+sudo truncate -s "${HALF_RAM_MIB}M" "$SWAPFILE"
+sudo chmod 600 "$SWAPFILE"
+sudo mkswap "$SWAPFILE"
+sudo swapon -p 10 "$SWAPFILE"
 
-# Recreate swapfile
-sudo rm -f $SWAPFILE
-sudo truncate -s {$HALF_RAM_MIB}M $SWAPFILE
-sudo chmod 600 $SWAPFILE
-sudo mkswap $SWAPFILE
+echo "$SWAPFILE none swap defaults,pri=10 0 0" | sudo tee -a /etc/fstab >/dev/null
 
-# Enable swapfile (lower priority than zram)
-sudo swapon -p 10 $SWAPFILE
-
-# Persist swapfile
-echo "$SWAPFILE none swap defaults,pri=10 0 0" | sudo tee -a /etc/fstab
-
-# ---- Reload and start zram ----
 sudo systemctl daemon-reload
 sudo systemctl restart systemd-zram-setup@zram0.service
 
-# ---- Show result ----
 echo
 swapon --show
-
 echo "Swap set up!"
 
-
+# -------------------------------------------------------------------
+# Reboot
+# -------------------------------------------------------------------
 echo
-echo "Time to reboot :D !"
-echo
-
+echo "Rebooting in 5 seconds..."
 sleep 5
-
-reboot
-
-echo
-echo "Press ENTER to close..."
-read
+sudo reboot
