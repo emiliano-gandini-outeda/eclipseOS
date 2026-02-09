@@ -66,7 +66,6 @@ if [[ -d "$SPOTIFY_INSTALL" ]]; then
   sudo chown -R "$USER:$USER" "$SPOTIFY_INSTALL"
 fi
 
-spicetify backup apply
 curl -fsSL https://raw.githubusercontent.com/spicetify/spicetify-marketplace/main/resources/install.sh | sh
 spicetify update
 spicetify apply
@@ -146,6 +145,9 @@ echo
 echo "=== Setting up proper swap ==="
 echo
 
+sudo swapoff -a
+sudo sed -i '\|/swapfile|d' /etc/fstab
+
 TOTAL_RAM_MIB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 HALF_RAM_MIB=$((TOTAL_RAM_MIB / 2))
 
@@ -175,7 +177,7 @@ fi
 
 sudo sed -i "\|^$SWAPFILE |d" /etc/fstab
 sudo rm -f "$SWAPFILE"
-sudo truncate -s "${HALF_RAM_MIB}M" "$SWAPFILE"
+sudo dd if=/dev/zero of="$SWAPFILE" bs=1M count="$HALF_RAM_MIB" status=progress
 sudo chmod 600 "$SWAPFILE"
 sudo mkswap "$SWAPFILE"
 sudo swapon -p 10 "$SWAPFILE"
