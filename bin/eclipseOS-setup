@@ -20,6 +20,23 @@ AUR_PACKAGES=(
 sudo pacman -Syu --noconfirm
 
 # -------------------------------------------------------------------
+# Pacman configuration (parallel downloads, color, ILoveCandy)
+# -------------------------------------------------------------------
+echo
+echo "=== Configuring Pacman ==="
+
+sudo sed -i 's/^#Color/Color/' /etc/pacman.conf
+sudo sed -i 's/^#VerbosePkgLists/VerbosePkgLists/' /etc/pacman.conf
+sudo sed -i 's/^#ParallelDownloads.*/ParallelDownloads = 5/' /etc/pacman.conf
+
+# Add ILoveCandy if not present
+if ! grep -q "ILoveCandy" /etc/pacman.conf; then
+  sudo sed -i '/^Color/a ILoveCandy' /etc/pacman.conf
+fi
+
+echo "✓ Pacman configured: parallel downloads, color, ILoveCandy"
+
+# -------------------------------------------------------------------
 # Ensure yay exists
 # -------------------------------------------------------------------
 if ! command -v yay >/dev/null 2>&1; then
@@ -139,57 +156,329 @@ else
 fi
 
 # -------------------------------------------------------------------
-# Swap & ZRAM
+# System Optimizations
 # -------------------------------------------------------------------
 echo
-echo "=== Setting up proper swap ==="
+echo "=== Applying System Optimizations ==="
+
+# Install required packages for optimizations
+sudo pacman -S --needed --noconfirm \
+  ufw \
+  smartmontools \
+  lm_sensors \
+  systemd-resolved \
+  btrfs-progs 2>/dev/null || true
+
+# -------------------------------------------------------------------
+# I/O Scheduler tuning: Automatically selects best scheduler per disk type
+# -------------------------------------------------------------------
+echo "-> Setting I/O schedulers..."
+sudo tee /etc/udev/rules.d/60-ioschedulers.rules >/dev/null <<'EOF'
+# Set scheduler for NVMe
+ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", ATTR{queue/scheduler}="none"
+# Set scheduler for SSD and eMMC
+ACTION=="add|change", KERNEL=="sd[a-z]|mmcblk[0-9]*", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="mq-deadline"
+# Set scheduler for rotating disks
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="1", ATTR{queue/scheduler}="bfq"
+EOF
+
+# -------------------------------------------------------------------
+# vm.swappiness tuning: Set to 10 (prefer RAM, use swap only when needed)
+# Transparent Huge Pages: Reduces memory overhead by using larger memory page sizes automatically
+# Kernel hardening: Security parameters set
+# -------------------------------------------------------------------
+echo "-> Configuring kernel parameters..."
+sudo tee /etc/sysctl.d/99-optimizations.conf >/dev/null <<'EOF'
+# Swappiness (prefer RAM over swap)
+vm.swappiness = 10
+vm.vfs_cache_pressure = 50
+
+# Transparent Huge Pages
+vm.nr_hugepages = 0
+# Let the system manage THP automatically
+# (enabled by default on most systems)
+
+# Kernel hardening
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+kernel.unprivileged_bpf_disabled = 1
+net.core.bpf_jit_harden = 2
+kernel.yama.ptrace_scope = 2
+kernel.unprivileged_userns_clone = 0
+
+# Network security
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.all.secure_redirects = 0
+net.ipv4.conf.default.secure_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.icmp_echo_ignore_all = 0
+net.ipv4.tcp_syncookies = 1
+
+# Performance
+vm.dirty_ratio = 10
+vm.dirty_background_ratio = 5
+EOF
+
+# Apply sysctl changes
+sudo sysctl -p /etc/sysctl.d/99-optimizations.conf
+
+# -------------------------------------------------------------------
+# Increase inotify watches: Allows more file watchers for IDEs, build tools, and file sync apps
+# -------------------------------------------------------------------
+echo "-> Increasing inotify watches..."
+sudo tee /etc/sysctl.d/40-max-user-watches.conf >/dev/null <<'EOF'
+fs.inotify.max_user_watches = 524288
+fs.inotify.max_user_instances = 512
+fs.inotify.max_queued_events = 32768
+EOF
+sudo sysctl -p /etc/sysctl.d/40-max-user-watches.conf
+
+# -------------------------------------------------------------------
+# Preload: Learns which apps you use most and preloads them into RAM for faster startup
+# -------------------------------------------------------------------
+read -p "Do you want to install preload? (learns usage patterns, uses ~50MB RAM) [y/N]: " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+  echo "-> Installing preload..."
+  if ! yay -Q preload &>/dev/null; then
+    yay -S --noconfirm preload || echo "Warning: Failed to install preload"
+  fi
+  sudo systemctl enable --now preload 2>/dev/null || true
+  echo "✓ Preload installed and enabled"
+else
+  echo "-> Skipping preload installation"
+fi
+
+# -------------------------------------------------------------------
+# Firewall (UFW)
+# -------------------------------------------------------------------
+echo "-> Configuring firewall..."
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw logging off
+sudo ufw --force enable
+sudo systemctl enable --now ufw
+
+echo "✓ Firewall enabled (UFW)"
+
+# -------------------------------------------------------------------
+# DNS over TLS with systemd-resolved: Encrypts DNS queries to prevent snooping and manipulation
+# -------------------------------------------------------------------
+echo "-> Configuring DNS over TLS..."
+sudo mkdir -p /etc/systemd/resolved.conf.d
+sudo tee /etc/systemd/resolved.conf.d/dns-over-tls.conf >/dev/null <<'EOF'
+[Resolve]
+DNS=1.1.1.1#cloudflare-dns.com 1.0.0.1#cloudflare-dns.com 2606:4700:4700::1111#cloudflare-dns.com 2606:4700:4700::1001#cloudflare-dns.com
+FallbackDNS=8.8.8.8#dns.google 8.8.4.4#dns.google 2001:4860:4860::8888#dns.google 2001:4860:4860::8844#dns.google
+DNSOverTLS=yes
+DNSSEC=yes
+Cache=yes
+EOF
+
+sudo systemctl enable --now systemd-resolved
+sudo ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf 2>/dev/null || true
+
+echo "✓ DNS over TLS configured"
+
+# -------------------------------------------------------------------
+# paccache cleanup: Automatically deletes old package versions to save disk space
+# -------------------------------------------------------------------
+echo "-> Setting up automatic package cache cleanup..."
+sudo mkdir -p /etc/pacman.d/hooks
+sudo tee /etc/pacman.d/hooks/clean-cache.hook >/dev/null <<'EOF'
+[Trigger]
+Operation = Upgrade
+Operation = Install
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Cleaning pacman cache...
+When = PostTransaction
+Exec = /usr/bin/paccache -rk2
+EOF
+
+# Clean cache now
+sudo paccache -rk2 2>/dev/null || true
+echo "✓ Package cache cleanup configured"
+
+# -------------------------------------------------------------------
+# Orphan package removal: Automatically removes packages no longer needed by anything
+# -------------------------------------------------------------------
+echo "-> Setting up orphan package cleanup..."
+sudo tee /etc/pacman.d/hooks/remove-orphans.hook >/dev/null <<'EOF'
+[Trigger]
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Removing orphaned packages...
+When = PostTransaction
+Exec = /bin/bash -c "/usr/bin/pacman -Qtdq > /dev/null && /usr/bin/pacman -Rns --noconfirm $(/usr/bin/pacman -Qtdq) || true"
+EOF
+
+# Clean orphans now
+sudo pacman -Qtdq | sudo pacman -Rns --noconfirm - 2>/dev/null || true
+echo "✓ Orphan package cleanup configured"
+
+# -------------------------------------------------------------------
+# BTRFS auto-scrub: Checks filesystem integrity monthly to detect and repair corruption early
+# -------------------------------------------------------------------
+if findmnt -n -o FSTYPE / | grep -q btrfs; then
+  echo "-> Enabling BTRFS scrub..."
+  sudo systemctl enable --now btrfs-scrub@-.timer
+  sudo systemctl enable --now btrfs-scrub@home.timer 2>/dev/null || true
+  echo "✓ BTRFS scrub enabled"
+else
+  echo "-> BTRFS not detected, skipping scrub setup"
+fi
+
+# -------------------------------------------------------------------
+# SMART monitoring: Monitors disk health and warns before drive failure
+# -------------------------------------------------------------------
+echo "-> Configuring SMART monitoring..."
+sudo systemctl enable --now smartd
+
+# Configure smartd
+sudo tee /etc/smartd.conf >/dev/null <<'EOF'
+# Monitor all devices
+DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03) -W 4,35,40
+EOF
+
+sudo systemctl restart smartd
+echo "✓ SMART monitoring enabled"
+
+# -------------------------------------------------------------------
+# Faster systemd timeout: Reduces wait time for failed services from 90s to 15s during boot
+# -------------------------------------------------------------------
+echo "-> Reducing systemd timeout..."
+sudo mkdir -p /etc/systemd/system.conf.d
+sudo tee /etc/systemd/system.conf.d/timeout.conf >/dev/null <<'EOF'
+[Manager]
+DefaultTimeoutStartSec=15s
+DefaultTimeoutStopSec=15s
+DefaultTimeoutAbortSec=15s
+DefaultDeviceTimeoutSec=15s
+EOF
+
+sudo systemctl daemon-reload
+echo "✓ Systemd timeout reduced to 15s"
+
+# -------------------------------------------------------------------
+# MAKEPKG parallel compilation: Uses all CPU cores when building packages from source (faster AUR builds)
+# -------------------------------------------------------------------
+echo "-> Configuring parallel compilation..."
+CORES=$(nproc)
+sudo sed -i "s/^#MAKEFLAGS=.*/MAKEFLAGS=\"-j$CORES\"/" /etc/makepkg.conf
+sudo sed -i 's/^COMPRESSXZ=(xz -c -z -)/COMPRESSXZ=(xz -c -z - --threads=0)/' /etc/makepkg.conf
+sudo sed -i 's/^COMPRESSZST=(zstd -c -z -q -)/COMPRESSZST=(zstd -c -z -q - --threads=0)/' /etc/makepkg.conf
+echo "✓ Parallel compilation configured (${CORES} cores)"
+
+# -------------------------------------------------------------------
+# Setup lm_sensors
+# -------------------------------------------------------------------
+echo "-> Detecting sensors..."
+sudo sensors-detect --auto >/dev/null 2>&1 || true
+echo "✓ Sensors configured"
+
+echo
+echo "=== System Optimizations Complete ==="
+echo
+
+# -------------------------------------------------------------------
+# Swap & ZRAM (Working configuration)
+# -------------------------------------------------------------------
+echo
+echo "=== Setting up swap (Btrfs safe) ==="
 echo
 
 sudo swapoff -a
-sudo sed -i '\|/swapfile|d' /etc/fstab
+sudo sed -i '\|/swap|d' /etc/fstab
+sudo rm -rf /swap
 
 TOTAL_RAM_MIB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
-HALF_RAM_MIB=$((TOTAL_RAM_MIB / 2))
 
 echo "Total RAM: $TOTAL_RAM_MIB MiB"
-echo "ZRAM:      $HALF_RAM_MIB MiB"
-echo "Swapfile:  $HALF_RAM_MIB MiB"
 
-# Disable existing zram
-while read -r dev; do
-  sudo swapoff "$dev"
-done < <(swapon --show=NAME --noheadings | grep '^/dev/zram' || true)
-
-sudo rm -f /etc/systemd/zram-generator.conf
-
-sudo tee /etc/systemd/zram-generator.conf >/dev/null <<EOF
+# Use formula-based ZRAM config (works better than explicit sizes)
+sudo tee /etc/systemd/zram-generator.conf >/dev/null <<'EOF'
 [zram0]
-zram-size = ${HALF_RAM_MIB}MiB
-compression-algorithm = lz4
+zram-size = ram / 2
+compression-algorithm = zstd
 swap-priority = 100
 EOF
 
-SWAPFILE=/swapfile
-
-if swapon --show=NAME --noheadings | grep -qx "$SWAPFILE"; then
-  sudo swapoff "$SWAPFILE"
+# Clean any existing zram
+if [[ -e /dev/zram0 ]]; then
+  sudo swapoff /dev/zram0 2>/dev/null || true
+  sudo rmmod zram 2>/dev/null || true
 fi
 
-sudo sed -i "\|^$SWAPFILE |d" /etc/fstab
-sudo rm -f "$SWAPFILE"
-sudo dd if=/dev/zero of="$SWAPFILE" bs=1M count="$HALF_RAM_MIB" status=progress
+sudo systemctl daemon-reload
+sudo systemctl start systemd-zram-setup@zram0.service
+
+if systemctl is-active --quiet systemd-zram-setup@zram0.service; then
+  echo "✓ ZRAM setup successful"
+  ZRAM_SIZE=$(lsblk -b -n -o SIZE /dev/zram0 2>/dev/null | awk '{print int($1/1024/1024)}')
+  echo "   ZRAM: ${ZRAM_SIZE} MiB"
+else
+  echo "✗ ZRAM setup failed"
+fi
+
+# Swapfile size based on RAM
+if [[ $TOTAL_RAM_MIB -lt 8192 ]]; then
+  SWAP_MIB=$((TOTAL_RAM_MIB))  # 1x RAM for low-RAM systems
+else
+  SWAP_MIB=$((TOTAL_RAM_MIB / 2))  # 0.5x RAM for higher-RAM systems
+fi
+
+echo "   Swapfile: $SWAP_MIB MiB"
+
+# --- Swapfile (Btrfs, CoW off) ---
+sudo mkdir -p /swap
+sudo chattr +C /swap
+
+SWAPFILE=/swap/swapfile
+sudo dd if=/dev/zero of="$SWAPFILE" bs=1M count="$SWAP_MIB" status=progress
 sudo chmod 600 "$SWAPFILE"
 sudo mkswap "$SWAPFILE"
 sudo swapon -p 10 "$SWAPFILE"
 
-echo "$SWAPFILE none swap defaults,pri=10 0 0" | sudo tee -a /etc/fstab >/dev/null
-
-sudo systemctl daemon-reload
-sudo systemctl restart systemd-zram-setup@zram0.service
+if ! grep -q "$SWAPFILE" /etc/fstab; then
+  echo "$SWAPFILE none swap defaults,pri=10 0 0" | sudo tee -a /etc/fstab >/dev/null
+fi
 
 echo
 swapon --show
-echo "Swap set up!"
+echo "✓ Swap setup complete!"
+
+# -------------------------------------------------------------------
+# SSD TRIM
+# -------------------------------------------------------------------
+echo
+echo "=== Configuring SSD TRIM ==="
+if lsblk -d -n -o NAME,ROTA | awk '$1 !~ /zram|loop/ && $2 == 0 { found=1 } END { exit !found }'; then
+  echo "-> SSD/NVMe detected, enabling fstrim.timer"
+  sudo systemctl enable --now fstrim.timer
+else
+  echo "-> No SSD detected, skipping TRIM"
+fi
+
+# -------------------------------------------------------------------
+# Summary
+# -------------------------------------------------------------------
+echo
+echo "=============================================="
+echo "    eclipseOS Setup Complete!"
+echo "=============================================="
 
 # -------------------------------------------------------------------
 # Reboot
