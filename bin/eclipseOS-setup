@@ -342,21 +342,6 @@ else
 fi
 
 # -------------------------------------------------------------------
-# SMART monitoring: Monitors disk health and warns before drive failure
-# -------------------------------------------------------------------
-echo "-> Configuring SMART monitoring..."
-sudo systemctl enable --now smartd
-
-# Configure smartd
-sudo tee /etc/smartd.conf >/dev/null <<'EOF'
-# Monitor all devices
-DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03) -W 4,35,40
-EOF
-
-sudo systemctl restart smartd
-echo "✓ SMART monitoring enabled"
-
-# -------------------------------------------------------------------
 # Faster systemd timeout: Reduces wait time for failed services from 90s to 15s during boot
 # -------------------------------------------------------------------
 echo "-> Reducing systemd timeout..."
