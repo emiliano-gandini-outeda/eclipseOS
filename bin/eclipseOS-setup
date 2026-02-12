@@ -185,6 +185,7 @@ EOF
 # -------------------------------------------------------------------
 # vm.swappiness tuning: Set to 10 (prefer RAM, use swap only when needed)
 # Transparent Huge Pages: Reduces memory overhead by using larger memory page sizes automatically
+# ZSwap: Compresses RAM pages before writing them to disk swap, reducing I/O
 # Kernel hardening: Security parameters set
 # -------------------------------------------------------------------
 echo "-> Configuring kernel parameters..."
@@ -225,6 +226,15 @@ vm.dirty_ratio = 10
 vm.dirty_background_ratio = 5
 EOF
 
+# Enable ZSwap via kernel parameters
+if ! grep -q "zswap.enabled=1" /etc/default/grub 2>/dev/null; then
+  echo "-> Enabling ZSwap in GRUB..."
+  sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/&zswap.enabled=1 zswap.compressor=zstd zswap.zpool=z3fold /' /etc/default/grub
+  if command -v grub-mkconfig >/dev/null 2>&1; then
+    sudo grub-mkconfig -o /boot/grub/grub.cfg
+  fi
+fi
+
 # Apply sysctl changes
 sudo sysctl -p /etc/sysctl.d/99-optimizations.conf
 
@@ -256,7 +266,7 @@ else
 fi
 
 # -------------------------------------------------------------------
-# Firewall (UFW)
+# Firewall (UFW): Blocks unwanted incoming connections while allowing outgoing traffic
 # -------------------------------------------------------------------
 echo "-> Configuring firewall..."
 sudo ufw default deny incoming
@@ -342,6 +352,21 @@ else
 fi
 
 # -------------------------------------------------------------------
+# SMART monitoring: Monitors disk health and warns before drive failure
+# -------------------------------------------------------------------
+echo "-> Configuring SMART monitoring..."
+sudo systemctl enable --now smartd
+
+# Configure smartd
+sudo tee /etc/smartd.conf >/dev/null <<'EOF'
+# Monitor all devices
+DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03) -W 4,35,40
+EOF
+
+sudo systemctl restart smartd
+echo "✓ SMART monitoring enabled"
+
+# -------------------------------------------------------------------
 # Faster systemd timeout: Reduces wait time for failed services from 90s to 15s during boot
 # -------------------------------------------------------------------
 echo "-> Reducing systemd timeout..."
@@ -368,7 +393,7 @@ sudo sed -i 's/^COMPRESSZST=(zstd -c -z -q -)/COMPRESSZST=(zstd -c -z -q - --thr
 echo "✓ Parallel compilation configured (${CORES} cores)"
 
 # -------------------------------------------------------------------
-# Setup lm_sensors
+# Setup lm_sensors: Detects and configures hardware monitoring sensors
 # -------------------------------------------------------------------
 echo "-> Detecting sensors..."
 sudo sensors-detect --auto >/dev/null 2>&1 || true
@@ -379,7 +404,7 @@ echo "=== System Optimizations Complete ==="
 echo
 
 # -------------------------------------------------------------------
-# Swap & ZRAM (Working configuration)
+# Swap & ZRAM (Manual setup - bypassing zram-generator)
 # -------------------------------------------------------------------
 echo
 echo "=== Setting up swap (Btrfs safe) ==="
@@ -390,16 +415,18 @@ sudo sed -i '\|/swap|d' /etc/fstab
 sudo rm -rf /swap
 
 TOTAL_RAM_MIB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+ZRAM_SIZE_MIB=$((TOTAL_RAM_MIB / 4))
 
 echo "Total RAM: $TOTAL_RAM_MIB MiB"
+echo "ZRAM:      $ZRAM_SIZE_MIB MiB"
 
-# Use formula-based ZRAM config (works better than explicit sizes)
-sudo tee /etc/systemd/zram-generator.conf >/dev/null <<'EOF'
-[zram0]
-zram-size = ram / 2
-compression-algorithm = zstd
-swap-priority = 100
-EOF
+# -------------------------------------------------------------------
+# ZRAM Manual Setup (bypassing zram-generator)
+# -------------------------------------------------------------------
+
+# Disable and remove zram-generator
+sudo systemctl disable --now systemd-zram-setup@zram0.service 2>/dev/null || true
+sudo rm -f /etc/systemd/zram-generator.conf
 
 # Clean any existing zram
 if [[ -e /dev/zram0 ]]; then
@@ -407,16 +434,34 @@ if [[ -e /dev/zram0 ]]; then
   sudo rmmod zram 2>/dev/null || true
 fi
 
-sudo systemctl daemon-reload
-sudo systemctl start systemd-zram-setup@zram0.service
+# Create manual ZRAM service
+sudo tee /etc/systemd/system/zram-swap.service >/dev/null <<EOF
+[Unit]
+Description=Manual ZRAM swap device
+After=local-fs.target
 
-if systemctl is-active --quiet systemd-zram-setup@zram0.service; then
-  echo "✓ ZRAM setup successful"
-  ZRAM_SIZE=$(lsblk -b -n -o SIZE /dev/zram0 2>/dev/null | awk '{print int($1/1024/1024)}')
-  echo "   ZRAM: ${ZRAM_SIZE} MiB"
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c 'modprobe zram num_devices=1 && echo ${ZRAM_SIZE_MIB}M > /sys/block/zram0/disksize && echo zstd > /sys/block/zram0/comp_algorithm && mkswap /dev/zram0 && swapon -p 100 /dev/zram0'
+ExecStop=/bin/bash -c 'swapoff /dev/zram0 2>/dev/null || true; rmmod zram 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now zram-swap.service
+
+if systemctl is-active --quiet zram-swap.service; then
+  echo "✓ ZRAM setup successful (manual service)"
 else
   echo "✗ ZRAM setup failed"
 fi
+
+# -------------------------------------------------------------------
+# Swapfile
+# -------------------------------------------------------------------
 
 # Swapfile size based on RAM
 if [[ $TOTAL_RAM_MIB -lt 8192 ]]; then
@@ -425,7 +470,7 @@ else
   SWAP_MIB=$((TOTAL_RAM_MIB / 2))  # 0.5x RAM for higher-RAM systems
 fi
 
-echo "   Swapfile: $SWAP_MIB MiB"
+echo "Swapfile:  $SWAP_MIB MiB"
 
 # --- Swapfile (Btrfs, CoW off) ---
 sudo mkdir -p /swap
@@ -446,7 +491,7 @@ swapon --show
 echo "✓ Swap setup complete!"
 
 # -------------------------------------------------------------------
-# SSD TRIM
+# SSD TRIM (NVMe-safe detection)
 # -------------------------------------------------------------------
 echo
 echo "=== Configuring SSD TRIM ==="
@@ -463,6 +508,32 @@ fi
 echo
 echo "=============================================="
 echo "    eclipseOS Setup Complete!"
+echo "=============================================="
+echo
+echo "Applied optimizations:"
+echo "  ✓ I/O schedulers (NVMe: none, SSD: mq-deadline, HDD: bfq)"
+echo "  ✓ Swappiness: 10 (prefer RAM)"
+echo "  ✓ Transparent Huge Pages enabled"
+echo "  ✓ ZSwap enabled (zstd compression)"
+echo "  ✓ Inotify watches: 524288"
+if yay -Q preload &>/dev/null; then
+  echo "  ✓ Preload for faster app launches"
+fi
+echo "  ✓ UFW firewall enabled"
+echo "  ✓ Kernel security hardening"
+echo "  ✓ DNS over TLS (Cloudflare)"
+echo "  ✓ Auto package cache cleanup"
+echo "  ✓ Auto orphan removal"
+if findmnt -n -o FSTYPE / | grep -q btrfs; then
+  echo "  ✓ BTRFS scrub timer"
+fi
+echo "  ✓ SMART disk monitoring"
+echo "  ✓ Systemd timeout: 15s"
+echo "  ✓ Parallel compilation (${CORES} cores)"
+echo "  ✓ Pacman: parallel downloads, color, ILoveCandy"
+echo "  ✓ ZRAM: ${ZRAM_SIZE_MIB} MiB (manual service)"
+echo "  ✓ Swapfile: ${SWAP_MIB} MiB"
+echo
 echo "=============================================="
 
 # -------------------------------------------------------------------
