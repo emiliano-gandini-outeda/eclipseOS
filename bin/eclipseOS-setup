@@ -226,15 +226,6 @@ vm.dirty_ratio = 10
 vm.dirty_background_ratio = 5
 EOF
 
-# Enable ZSwap via kernel parameters
-if ! grep -q "zswap.enabled=1" /etc/default/grub 2>/dev/null; then
-  echo "-> Enabling ZSwap in GRUB..."
-  sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/&zswap.enabled=1 zswap.compressor=zstd zswap.zpool=z3fold /' /etc/default/grub
-  if command -v grub-mkconfig >/dev/null 2>&1; then
-    sudo grub-mkconfig -o /boot/grub/grub.cfg
-  fi
-fi
-
 # Apply sysctl changes
 sudo sysctl -p /etc/sysctl.d/99-optimizations.conf
 
@@ -350,21 +341,6 @@ if findmnt -n -o FSTYPE / | grep -q btrfs; then
 else
   echo "-> BTRFS not detected, skipping scrub setup"
 fi
-
-# -------------------------------------------------------------------
-# SMART monitoring: Monitors disk health and warns before drive failure
-# -------------------------------------------------------------------
-echo "-> Configuring SMART monitoring..."
-sudo systemctl enable --now smartd
-
-# Configure smartd
-sudo tee /etc/smartd.conf >/dev/null <<'EOF'
-# Monitor all devices
-DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03) -W 4,35,40
-EOF
-
-sudo systemctl restart smartd
-echo "✓ SMART monitoring enabled"
 
 # -------------------------------------------------------------------
 # Faster systemd timeout: Reduces wait time for failed services from 90s to 15s during boot
