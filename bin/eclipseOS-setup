@@ -83,9 +83,9 @@ if [[ -d "$SPOTIFY_INSTALL" ]]; then
   sudo chown -R "$USER:$USER" "$SPOTIFY_INSTALL"
 fi
 
+spicetify backup apply
+
 curl -fsSL https://raw.githubusercontent.com/spicetify/spicetify-marketplace/main/resources/install.sh | sh
-spicetify update
-spicetify apply
 
 # -------------------------------------------------------------------
 # Permissions
